@@ -263,9 +263,38 @@ lean_exe sky_replay where
 lean_exe leanclef_mlir where
   root := `HeytingLean.LeanClef.CLI.LeanClefMLIRMain
 
+-- LeanClef verified checker: run buildProgram + checkProgram on test inputs.
+lean_exe leanclef_check where
+  root := `HeytingLean.LeanClef.CLI.LeanClefCheckMain
+
+-- LeanClef HVM3 emitter: emit ICC terms as HVM3 source text for GPU reduction.
+lean_exe leanclef_hvm3 where
+  root := `HeytingLean.LeanClef.CLI.LeanClefHVM3Main
+
+-- LeanClef GPU pipeline: verified check → HVM3 emission → GPU execution.
+lean_exe leanclef_gpu where
+  root := `HeytingLean.LeanClef.CLI.LeanClefGPUMain
+
+-- LeanClef benchmark: standard reduction vs HVM3 interaction net reduction.
+lean_exe leanclef_bench where
+  root := `HeytingLean.LeanClef.CLI.LeanClefBenchMain
+
+-- LeanClef Inet FFI benchmark: 3-way comparison (Lean native vs Inet FFI vs HVM3).
+-- Links against libinet_reduce (precompiled C reduction kernel).
+lean_exe leanclef_inet_bench where
+  root := `HeytingLean.LeanClef.CLI.LeanClefInetBenchMain
+  moreLinkArgs := #[
+    ((__dir__ / ".." / "projects" / "inet_mlir" / "lib" / "inet_reduce_ffi.o").toString),
+    ((__dir__ / ".." / "projects" / "inet_mlir" / "lib" / "libinet_reduce_core.a").toString)
+  ]
+
 -- LeanCP C export: emit the SKY reducer lowering surface as concrete C source.
 lean_exe leancp_export where
   root := `HeytingLean.CLI.LeanCPExportMain
+
+-- LeanCP Rust export: translate C IR → Rust IR → .rs source text.
+lean_exe leancp_export_rust where
+  root := `HeytingLean.CLI.LeanCPExportRustMain
 
 -- IteratedVirtual: dump helix/spiral embedding points as JSON (smoke-runnable with no args).
 lean_exe iterated_virtual_spiral_dump where

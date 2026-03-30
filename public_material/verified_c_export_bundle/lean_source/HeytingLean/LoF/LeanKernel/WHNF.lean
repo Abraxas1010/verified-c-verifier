@@ -152,11 +152,12 @@ private def whnfHeadStepWithDelta?
               | _ => none
   | _ => none
 
-mutual
-
-private partial def recursorMajorStepWithDelta?
-    (constValue? : Name → List (ULevel Param MetaLevel) → Option (Expr Name Param MetaLevel MetaExpr))
+/-- Try one recursor-major normalization step. NOT recursive — the recursive
+WHNF step is passed in as `oneStep`. This eliminates the mutual recursion
+that previously required `partial`. -/
+private def recursorMajorStep
     (rules : Inductive.IotaRules Name)
+    (oneStep : Expr Name Param MetaLevel MetaExpr → Option (Expr Name Param MetaLevel MetaExpr))
     (e : Expr Name Param MetaLevel MetaExpr) :
     Option (Expr Name Param MetaLevel MetaExpr) :=
   let (fn, args) :=
@@ -174,7 +175,7 @@ private partial def recursorMajorStepWithDelta?
                 let tailArgs := args.drop expected
                 match coreArgs[majorIdx]? with
                 | some major =>
-                    match whnfStepWithDelta? constValue? rules major with
+                    match oneStep major with
                     | some major' =>
                         match setArg? coreArgs majorIdx major' with
                         | some coreArgs' =>
@@ -198,18 +199,26 @@ private partial def recursorMajorStepWithDelta?
 
 /-- One weak-head reduction step (β/ζ/δ/ι), parameterized by:
 - `constValue?` for δ-reduction (unfolding constants),
-- `casesOn`-style iota rules (Phase 11).
+- `casesOn`-style iota rules (Phase 11),
+- `stepFuel` bounding recursive depth for recursor major normalization.
 
-When `constValue?` returns `none`, δ-reduction is disabled. -/
-private partial def whnfStepWithDelta?
+When `constValue?` returns `none`, δ-reduction is disabled.
+When `stepFuel` reaches 0, recursor major steps return `none`.
+
+This function is NOT `partial`: termination is by decreasing `stepFuel`.
+The previous `mutual`/`partial` block was refactored to pass a step function
+to the non-recursive `recursorMajorStep` helper. -/
+private def whnfStepWithDelta?
     (constValue? : Name → List (ULevel Param MetaLevel) → Option (Expr Name Param MetaLevel MetaExpr))
     (rules : Inductive.IotaRules Name) :
-    Expr Name Param MetaLevel MetaExpr → Option (Expr Name Param MetaLevel MetaExpr)
-  | e@(.app f a) =>
+    Nat → Expr Name Param MetaLevel MetaExpr → Option (Expr Name Param MetaLevel MetaExpr)
+  | 0, _ => none
+  | stepFuel + 1, e@(.app f a) =>
       match Inductive.iotaStep? (Name := Name) (Param := Param) (MetaLevel := MetaLevel) (MetaExpr := MetaExpr) rules e with
       | some e' => some e'
       | none =>
-          match recursorMajorStepWithDelta? constValue? rules e with
+          match recursorMajorStep rules
+              (whnfStepWithDelta? constValue? rules stepFuel) e with
           | some e' => some e'
           | none =>
               match whnfHeadStepWithDelta? constValue? rules f with
@@ -219,14 +228,12 @@ private partial def whnfStepWithDelta?
                   | .lam _ _ _ body =>
                       some (Expr.instantiate1 (Name := Name) (Param := Param) (MetaLevel := MetaLevel) (MetaExpr := MetaExpr) a body)
                   | _ => none
-  | e => whnfHeadStepWithDelta? constValue? rules e
-
-end
+  | _, e => whnfHeadStepWithDelta? constValue? rules e
 
 /-- One weak-head reduction step (β/ζ/ι), parameterized by `casesOn`-style iota rules. -/
-def whnfStepWith? (rules : Inductive.IotaRules Name) :
+def whnfStepWith? (rules : Inductive.IotaRules Name) (stepFuel : Nat) :
     Expr Name Param MetaLevel MetaExpr → Option (Expr Name Param MetaLevel MetaExpr) :=
-  whnfStepWithDelta? (fun _ _ => none) rules
+  whnfStepWithDelta? (fun _ _ => none) rules stepFuel
 
 /-- One weak-head reduction step (β/ζ), with a left-spine strategy for `app`. -/
 def whnfStep? :
@@ -243,14 +250,16 @@ def whnfStep? :
               | _ => none
   | _ => none
 
-/-- Bounded WHNF with δ/ι rules: iterates `whnfStepWithDelta?` up to `fuel` times. -/
+/-- Bounded WHNF with δ/ι rules: iterates `whnfStepWithDelta?` up to `fuel` times.
+The `fuel` parameter is also passed as `stepFuel` to `whnfStepWithDelta?`, bounding
+the depth of recursive recursor-major normalization within each step. -/
 def whnfWithDelta
     (constValue? : Name → List (ULevel Param MetaLevel) → Option (Expr Name Param MetaLevel MetaExpr))
     (rules : Inductive.IotaRules Name) :
     Nat → Expr Name Param MetaLevel MetaExpr → Expr Name Param MetaLevel MetaExpr
   | 0, e => e
   | fuel + 1, e =>
-      match whnfStepWithDelta? constValue? rules e with
+      match whnfStepWithDelta? constValue? rules (fuel + 1) e with
       | some e' => whnfWithDelta constValue? rules fuel e'
       | none => e
 
