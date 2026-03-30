@@ -18,45 +18,75 @@ We humbly thank the collective intelligence of humanity for providing the techno
 
 # Verified C Verifier
 
-Independently verify that C code was derived from kernel-checked Lean 4 proofs — offline, without calling the issuing API.
+**Don't trust us. Verify.**
 
-When someone gives you a C file, Lean source, and a generation certificate, this tool answers one question: **was this exact C code produced by a verified Lean-to-C pipeline, and has anything been tampered with since?**
+---
 
-## What This Tool Checks
+## Why This Exists
 
-1. **C output integrity** — SHA-256 of the C file you have matches what the pipeline produced
-2. **Lean source integrity** — SHA-256 of the Lean source tree matches the certificate
-3. **Toolchain match** — the Lean 4 toolchain version matches the certificate
-4. **Build success** — the Lean kernel accepted the proofs (exit code 0)
-5. **Full re-verification** (optional) — re-runs `lake build` and `lake exe` to independently reproduce the C output
+Someone hands you a C file and tells you it was "mathematically proven correct." Why should you believe them?
 
-If all checks pass: `accept = true`. If any check fails: `accept = false` with a list of exactly which checks failed.
+You shouldn't. Not because they're lying — but because trust is the wrong foundation for critical software. Trust is a social mechanism. Mathematics is not social. A proof either type-checks or it doesn't. A hash either matches or it doesn't. These are facts, not promises.
+
+This tool lets you check those facts yourself — on your own machine, offline, without any API calls, accounts, or dependencies on our infrastructure. The mathematical guarantee is not something we sell. It is something we *prove*, and this verifier lets you confirm it independently.
+
+## What This Tool Does
+
+When you receive C code from the [verified-c-from-proof](https://github.com/Abraxas1010/verified-c-from-proof) generation service, you also receive:
+
+- **The Lean 4 source** — the complete specification and proof that the C code was derived from
+- **A generation certificate** — a SHA-256 chain binding the proof to the C output
+
+This verifier checks that chain. It answers one question: **was this exact C file produced by the verified pipeline from this exact proof, and has anything been tampered with since?**
+
+### The checks
+
+| # | Check | What It Proves |
+|---|-------|---------------|
+| 1 | C output SHA-256 | The C file you received is exactly what the pipeline produced — not modified, not substituted |
+| 2 | Lean source SHA-256 | The proof you received is exactly what was used to generate the C — not edited after the fact |
+| 3 | Toolchain match | The Lean version used for generation matches what this verifier expects |
+| 4 | Build exit code | The Lean kernel accepted the proofs — they type-checked, they're valid |
+| 5 | Full re-derivation (optional) | Re-runs the entire Lean build and C export to independently reproduce the output |
+
+If all checks pass: `accept = true`. If any fail: `accept = false` with exactly which checks failed and why.
+
+## Why This Matters
+
+### The trust boundary is one thing
+
+The **Lean 4 kernel** — an open-source type checker — is the sole trusted computing base. Everything else (our Python code, our CLI, our cloud infrastructure, our business) is outside the trust boundary.
+
+You don't need to trust our code. You don't need to trust our servers. You don't even need to trust this verifier. Install [Lean 4.24.0](https://github.com/leanprover/lean4) and run `lake build` on the source yourself. If it compiles, the proofs are valid. That's not our claim — that's how type theory works.
+
+### Testing finds bugs. Proofs eliminate them.
+
+A test suite with 100% line coverage can still miss a buffer overflow on one specific input. A formal proof covers *every* input, *every* execution path, *every* edge case — not by trying them all, but by mathematical induction over the structure of the program. The Lean kernel checks that induction. This verifier checks that the kernel's verdict hasn't been forged.
+
+### The verification is free
+
+We charge for the generation service — running the Lean kernel, building the export pipeline, maintaining the infrastructure. The verification is free, open-source, and runs offline. We designed it this way because verification that depends on the vendor's infrastructure isn't real verification.
 
 ## Prerequisites
 
 - Python 3.11+
 - Lean 4.24.0 via [elan](https://github.com/leanprover/elan) (only for `--full` mode)
 
-Hash-only verification (the default) requires **no Lean installation**.
+Hash-only verification (the default) requires **no Lean installation** and completes in seconds.
 
-## Step-by-Step Verification Guide
+## Step-by-Step Guide
 
-### Step 1: Clone this repo
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/Abraxas1010/verified-c-verifier.git
 cd verified-c-verifier
-```
-
-### Step 2: Install Python dependencies
-
-```bash
 python3 -m pip install -e .
 ```
 
-### Step 3: Verify the shipped bundle
+### 2. Try it now — verify the shipped bundle
 
-This repo ships with a real, verifiable output bundle. Try it immediately:
+This repo ships with a real output bundle from the pipeline. No setup required:
 
 ```bash
 leancp-verify \
@@ -66,12 +96,14 @@ leancp-verify \
   --json
 ```
 
-### Step 4: Verify your own artifacts
+You should see `"accept": true`. That's a real certificate for real C code derived from a real kernel-checked Lean proof — and you just verified it on your own machine.
+
+### 3. Verify your own artifacts
 
 You need three things from the generation service:
-- The **C source file** (the generated output)
-- The **Lean source directory** (the proofs that produced it)
-- The **generation certificate** (the SHA-256 chain binding them)
+- The **C source file** (`output.c`)
+- The **Lean source directory** (`lean_source/`)
+- The **generation certificate** (`generation.json`)
 
 ```bash
 leancp-verify \
@@ -81,9 +113,9 @@ leancp-verify \
   --json
 ```
 
-### Step 5: Read the result
+### 4. Read the result
 
-**If verification passes:**
+**Accepted:**
 
 ```json
 {
@@ -96,31 +128,29 @@ leancp-verify \
 }
 ```
 
-`accept: true` means: the C file matches the certificate, the Lean source matches, and the kernel accepted the proofs.
-
-**If verification fails:**
+**Rejected:**
 
 ```json
 {
   "accept": false,
-  "failed_checks": ["c_output_sha256", "lean_source_sha256"],
+  "failed_checks": ["c_output_sha256"],
   "kernel_verdict": "rejected"
 }
 ```
 
-`failed_checks` tells you exactly what went wrong. Common failures:
+`failed_checks` tells you exactly what failed:
 
-| Failed Check | What It Means |
+| Failed Check | Meaning |
 |---|---|
-| `c_output_sha256` | The C file doesn't match the certificate — wrong file, or file was modified |
-| `lean_source_sha256` | The Lean source doesn't match — source was modified after generation |
-| `lean_toolchain_match` | Certificate was generated with a different Lean version than this verifier expects |
-| `lean_build_exit_code` | The Lean kernel rejected the proofs (build failed) |
-| `certificate_schema` | The certificate JSON doesn't match the expected schema |
+| `c_output_sha256` | The C file was modified or substituted after generation |
+| `lean_source_sha256` | The Lean source was modified after generation |
+| `lean_toolchain_match` | Generated with a different Lean version |
+| `lean_build_exit_code` | The Lean kernel rejected the proofs |
+| `certificate_schema` | Certificate format is invalid or unrecognized |
 
-### Step 6: Full independent verification (optional)
+### 5. Full independent re-derivation (optional)
 
-If you want to go beyond hash checking and independently re-run the Lean kernel:
+If hash checking isn't enough and you want to re-run the Lean kernel yourself:
 
 ```bash
 leancp-verify \
@@ -131,109 +161,60 @@ leancp-verify \
   --json
 ```
 
-This requires Lean 4.24.0 installed via elan. It will:
-1. Run `lake build` on the Lean source to kernel-check the proofs
-2. Run `lake exe leancp_export` to re-derive the C output
-3. Compare the re-derived C output against the provided file
+This requires Lean 4.24.0 via elan. It will:
+1. Run `lake build` to independently kernel-check every proof in the source
+2. Run `lake exe leancp_export` to re-derive the C output from scratch
+3. Compare the re-derived output byte-for-byte against the file you received
 
-Additional `--full` failure modes:
+If the hashes match, the C code you have is *exactly* what those proofs produce. Not similar. Not equivalent. Identical.
 
-| Failed Check | What It Means |
-|---|---|
-| `full_build_missing_lakefile` | The Lean source bundle is missing `lakefile.lean` |
-| `full_build_failed` | `lake build` failed — the proofs don't type-check |
-| `full_build_timeout` | Build exceeded 600s timeout |
-| `full_export_failed` | `lake exe` failed to produce C output |
-| `full_c_output_mismatch` | Re-derived C output differs from the provided file |
+## Use in scripts
 
-## Text Output Mode
-
-Omit `--json` for a compact text format:
-
-```bash
-leancp-verify \
-  --c-file output.c \
-  --lean-source lean_source/ \
-  --certificate generation.json
-```
-
-```
-accept: True
-failed_checks: []
-lean_toolchain_match: True
-kernel_verdict: accepted
-```
-
-The exit code is `0` for accept and `1` for reject, so you can use it in scripts:
+Exit code `0` = accepted, `1` = rejected:
 
 ```bash
 if leancp-verify --c-file output.c --lean-source lean_source/ --certificate generation.json; then
-  echo "Verified"
+  echo "Verified — this C code is the proven output of the supplied Lean proofs"
 else
-  echo "Verification failed"
+  echo "REJECTED — do not use this artifact"
 fi
 ```
 
 ## Generation Service
 
-Generation certificates are created through the hosted service at:
+Certificates are created through the hosted generation service at:
 
 **[www.agentpmt.com/marketplace/verified-c-from-proof](https://www.agentpmt.com/marketplace/verified-c-from-proof)**
 
-The hosted service accepts Lean 4 specifications and proofs, runs the Lean kernel to verify them, and emits C source code with a generation certificate. It is available as a REST API for integration into CI/CD pipelines, automated workflows, and custom tooling.
+Submit Lean 4 specifications and proofs. Get back verified C code with a generation certificate. The service runs the Lean kernel on our infrastructure so you don't have to maintain a build environment. It is available as a REST API for CI/CD integration.
 
-**This repo is for independent offline verification.** It lets you confirm generation certificates without any API calls, accounts, or trust in our servers. The mathematical guarantee is free and portable — the Lean 4 kernel is open source.
+**This repo is for independent offline verification.** It exists so you never have to trust our service to know your artifacts are genuine.
 
-## What "Accept" Means — and Doesn't Mean
+## What "Accept" Means — Precisely
 
-**Accept means:**
-- The Lean kernel accepted the proofs (build exit code 0)
-- The C output SHA-256 matches the signed certificate
-- The Lean source SHA-256 matches the signed certificate
-- The Lean toolchain version matches
+**Accept certifies:**
+- The Lean kernel accepted the proofs (type-checked, no holes)
+- The C output is the deterministic product of those proofs
+- The SHA-256 chain is intact from proof to artifact
+- The toolchain version is consistent
 
-**Accept does NOT mean:**
-- The specification is mathematically correct
-- The generated C is portable without additional assumptions
-- The C code is constant-time or side-channel safe
-- The code is production hardened
+**Accept does NOT certify:**
+- That the specification captures your intent (you wrote the spec — review it)
+- That the C is portable to all architectures (it targets a specific runtime model)
+- That the C is constant-time (timing depends on compiler and hardware)
+- That the C is production-hardened (no fuzzing beyond what the proof covers)
 
-The certificate proves **that specific C code was derived from kernel-checked Lean proofs** — nothing more.
+A proof of the wrong theorem is still a valid proof. We verify the *proof*, not the *intent*.
 
-## Trust Model
-
-The **Lean 4 kernel** is the sole trusted computing base (TCB). It is:
-- Open source ([leanprover/lean4](https://github.com/leanprover/lean4))
-- Independently auditable
-- The same kernel used by the Mathlib mathematical library
-
-The Python wrapper, CLI, and container infrastructure do NO verification. They orchestrate the Lean kernel and package its results. If you distrust our infrastructure, you can take the Lean source, install Lean 4.24.0 yourself, and run `lake build` + `lake exe leancp_export` independently.
-
-## Certificate Schema
-
-```json
-{
-  "schema_version": "leancp-generation-certificate-v1",
-  "generated_at": "2026-03-30T12:00:00Z",
-  "lean_toolchain": "leanprover/lean4:v4.24.0",
-  "leancp_library_sha256": "<SHA-256 of LeanCP library oleans>",
-  "lean_source_sha256": "<SHA-256 of input Lean source tree>",
-  "lean_build_exit_code": 0,
-  "sorry_count": 0,
-  "admit_count": 0,
-  "c_output_sha256": "<SHA-256 of emitted C file>",
-  "c_output_deterministic": true,
-  "generation_log_sha256": "<SHA-256 of build log>"
-}
-```
+Full details: [docs/verification_contract.md](docs/verification_contract.md)
 
 ## Repo Layout
 
-- `verifier/` — verification library (models, SHA-256 chain checking, full re-build logic)
+- `verifier/` — verification library (models, SHA-256 chain checking, full re-build)
 - `cli/` — command-line entrypoint (`leancp_verify.py`)
 - `public_material/` — shipped verification bundle with real, verifiable artifacts
 - `docs/` — verification contract
-- `examples/` — usage examples and expected outputs
+- `examples/` — usage examples
 
 ## License
 
