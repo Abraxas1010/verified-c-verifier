@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verified-c-verifier"
+version = "0.1.0"
+description = "Standalone offline verifier for LeanCP generation certificates — independently confirm that C code was derived from kernel-checked Lean proofs."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.11,<3"]
+
+[project.urls]
+Homepage = "https://github.com/Abraxas1010/verified-c-verifier"
+Repository = "https://github.com/Abraxas1010/verified-c-verifier"
+
+[project.scripts]
+leancp-verify = "cli.leancp_verify:main"
+
+[tool.setuptools]
+packages = ["verifier", "cli"]

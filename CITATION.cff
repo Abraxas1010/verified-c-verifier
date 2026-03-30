@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+title: "Verified C Verifier"
+message: "If you use this standalone verifier, please cite it using this metadata."
+type: software
+authors:
+  - family-names: "Goodman"
+    given-names: "Ryan"
+repository-code: "https://github.com/Abraxas1010/verified-c-verifier"
+license: "Apoth3osis License Stack v1"
+abstract: "Standalone public verifier for LeanCP generation certificates — independently confirm that C code was derived from kernel-checked Lean 4 proofs."
+keywords:
+  - "formal verification"
+  - "Lean 4"
+  - "verified C"
+  - "code generation"
+  - "offline verification"
+  - "separation logic"

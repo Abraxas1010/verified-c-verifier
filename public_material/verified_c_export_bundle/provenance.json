@@ -1,0 +1,15 @@
+{
+  "theorems": [
+    "sky_reducer_step_preserves_invariant",
+    "sky_reducer_step_terminates"
+  ],
+  "program_id": "sky_reducer_step",
+  "lean_modules": [
+    "HeytingLean.LoF.SKY.SKYReducer",
+    "HeytingLean.LoF.SKY.SKYReducerKernel",
+    "HeytingLean.LeanCP.CEmit"
+  ],
+  "description": "LeanCP-exported SKY combinator reducer — verified C lowering via separation-logic VCG",
+  "export_target": "leancp_export",
+  "lean_toolchain": "leanprover/lean4:v4.24.0"
+}
